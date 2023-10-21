@@ -1,4 +1,4 @@
-module github.com/willscott/go-selfish-bitswap-client
+module github.com/dettanym/dhtpir-private-bitswap-client
 
 go 1.18
 
@@ -14,6 +14,7 @@ require (
 	github.com/multiformats/go-multicodec v0.8.1
 	github.com/multiformats/go-multihash v0.2.1
 	github.com/urfave/cli/v2 v2.3.0
+	github.com/willscott/go-selfish-bitswap-client v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -38,7 +39,6 @@ require (
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20230405160723-4a4c7d95572b // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/huin/goupnp v1.1.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
@@ -128,3 +128,5 @@ require (
 	lukechampine.com/blake3 v1.1.7 // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )
+
+replace github.com/willscott/go-selfish-bitswap-client => ./
