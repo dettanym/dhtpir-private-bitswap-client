@@ -114,6 +114,16 @@ func (h *handler) readLoop(stream network.Stream) {
 	}
 }
 
+func (h *handler) processPIRRequestFromEncryptedCIDToIndex(encryptedCID []byte) (encryptedIndex []byte, err error) {
+	encryptedIndex = make([]byte, 0)
+	return encryptedIndex, nil
+}
+
+func (h *handler) processPIRRequestFromEncryptedIndexToBlock(encryptedIndex []byte) (encryptedBlock []byte, err error) {
+	encryptedBlock = make([]byte, 0)
+	return encryptedBlock, nil
+}
+
 func (h *handler) onMessage(ss *streamSender, buf []byte) error {
 	m := bitswap_message_pb.Message{}
 	if err := m.Unmarshal(buf); err != nil {
@@ -127,7 +137,13 @@ func (h *handler) onMessage(ss *streamSender, buf []byte) error {
 	timed, cncl := context.WithTimeout(context.Background(), time.Second)
 	defer cncl()
 	for _, e := range m.Wantlist.Entries {
+		// Changes in function signatures: no block CIDs here
+		// TODO: We'd need to process the encrypted CID and return an encrypted Index
+		//  (instead of Message_Have) and then process the encrypted Block Request to return Block
+
 		if has, err := h.bs.Has(timed, e.Block.Cid); err == nil && has {
+			// We will need to separately process the WantHave from the Have
+			//
 			if filled < MaxSendMsgSize {
 				data, err := h.bs.Get(timed, e.Block.Cid)
 				if err != nil {
