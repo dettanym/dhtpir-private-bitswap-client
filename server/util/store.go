@@ -36,6 +36,11 @@ func (s *store) Get(ctx context.Context, c cid.Cid) (blocks.Block, error) {
 	return nil, ErrNotHave
 }
 
+// TODO: To encode the blcoks here, take as input an encoder callback function to run on each array item.
+func (s *store) GetAll() map[cid.Cid][]byte {
+	return s.db
+}
+
 func Add(s bitswapserver.Blockstore, blk []byte) cid.Cid {
 	st, ok := s.(*store)
 	if !ok {
