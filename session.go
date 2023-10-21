@@ -38,8 +38,9 @@ type Session struct {
 	// 1 message sent on the ready chan once the connection is established
 	ready chan struct{}
 
-	wants chan cid.Cid
-	lbuf  []byte
+	wants        chan cid.Cid
+	privateWants chan string
+	lbuf         []byte
 
 	interestMtx sync.Mutex
 	interests   map[string]func([]byte, error)
@@ -201,6 +202,8 @@ func (s *Session) writeLoop(ctx context.Context) {
 func (s *Session) send(cids []cid.Cid) error {
 	m := bitswap_message_pb.Message{}
 	m.Wantlist = bitswap_message_pb.Message_Wantlist{}
+	// TODO: Generate a list of encrypted CIDs
+	//  using s.generatePIRRequestToGetIndexFromCID(c)
 	for _, c := range cids {
 		bc := bitswap_message_pb.Cid{Cid: c}
 		m.Wantlist.Entries = append(m.Wantlist.Entries, bitswap_message_pb.Message_Wantlist_Entry{Block: bc})
@@ -308,6 +311,22 @@ func (s *Session) resolve(c cid.Cid, data []byte, err error) error {
 	}
 }
 
+func (s *Session) generatePIRRequestToGetIndexFromCID(c cid.Cid) ([]byte, error) {
+	return make([]byte, 0), nil
+}
+
+func (s *Session) decodeIndex(encryptedIndex []byte) (int64, error) {
+	return 0, nil
+}
+
+func (s *Session) generatePIRRequestToGetBlockFromIndex(index int64) ([]byte, error) {
+	return make([]byte, 0), nil
+}
+
+func (s *Session) decodeBlock(encryptedBlock []byte) ([]byte, error) {
+	return make([]byte, 0), nil
+}
+
 // Get a specific block of data in this session.
 // ctx is used to wrap client in timeout logic across a session.
 func (s *Session) Get(ctx context.Context, c cid.Cid) ([]byte, error) {
@@ -324,6 +343,8 @@ func (s *Session) Get(ctx context.Context, c cid.Cid) ([]byte, error) {
 	var data []byte
 	var err error
 
+	// TODO: run decodeIndex and trigger running the generatePIRRequestToGetBlockFromIndex
+	//  and then when the server responds with the block, again, trigger decodeBlock
 	s.on(c, func(rb []byte, re error) {
 		data = rb
 		err = re
