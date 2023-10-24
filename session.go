@@ -206,7 +206,7 @@ func (s *Session) send(cids []cid.Cid) error {
 	//  using s.generatePIRRequestToGetIndexFromCID(c)
 	for _, c := range cids {
 		bc := bitswap_message_pb.Cid{Cid: c}
-		m.Wantlist.Entries = append(m.Wantlist.Entries, bitswap_message_pb.Message_Wantlist_Entry{Block: bc})
+		m.Wantlist.Entries = append(m.Wantlist.Entries, bitswap_message_pb.Message_Wantlist_Entry{Block: bc, SendDontHave: true})
 	}
 
 	bytes, err := m.Marshal()
