@@ -140,10 +140,9 @@ func (h *handler) onMessage(ss *streamSender, buf []byte) error {
 		// Changes in function signatures: no block CIDs here
 		// TODO: We'd need to process the encrypted CID and return an encrypted Index
 		//  (instead of Message_Have) and then process the encrypted Block Request to return Block
-
-		if has, err := h.bs.Has(timed, e.Block.Cid); err == nil && has {
-			wantType := e.GetWantType().String()
-			if wantType == "Block" && filled < MaxSendMsgSize {
+		wantType := e.GetWantType().String()
+		if wantType == "Block" {
+			if filled < MaxSendMsgSize {
 				data, err := h.bs.Get(timed, e.Block.Cid)
 				if err != nil {
 					return err
@@ -157,11 +156,20 @@ func (h *handler) onMessage(ss *streamSender, buf []byte) error {
 					Type: bitswap_message_pb.Message_Have,
 				})
 			}
-		} else { // we don't have the block
-			resp.BlockPresences = append(resp.BlockPresences, bitswap_message_pb.Message_BlockPresence{
-				Cid:  e.Block,
-				Type: bitswap_message_pb.Message_DontHave,
-			})
+
+		} else { // wantType == "Have"
+			// just reply back whether we have the message or not
+			if has, err := h.bs.Has(timed, e.Block.Cid); err == nil && has {
+				resp.BlockPresences = append(resp.BlockPresences, bitswap_message_pb.Message_BlockPresence{
+					Cid:  e.Block, // this just returns the CID from the request, not to be confused with the block fetched above
+					Type: bitswap_message_pb.Message_Have,
+				})
+			} else if e.SendDontHave == true {
+				resp.BlockPresences = append(resp.BlockPresences, bitswap_message_pb.Message_BlockPresence{
+					Cid:  e.Block, // this just returns the CID from the request, not to be confused with the block fetched above
+					Type: bitswap_message_pb.Message_DontHave,
+				})
+			}
 		}
 	}
 
