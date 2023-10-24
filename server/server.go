@@ -142,21 +142,26 @@ func (h *handler) onMessage(ss *streamSender, buf []byte) error {
 		//  (instead of Message_Have) and then process the encrypted Block Request to return Block
 
 		if has, err := h.bs.Has(timed, e.Block.Cid); err == nil && has {
-			// We will need to separately process the WantHave from the Have
-			//
-			if filled < MaxSendMsgSize {
+			wantType := e.GetWantType().String()
+			if wantType == "Block" && filled < MaxSendMsgSize {
 				data, err := h.bs.Get(timed, e.Block.Cid)
 				if err != nil {
 					return err
 				}
 				resp.Blocks = append(resp.Blocks, data.RawData())
 				filled += len(data.RawData())
-			} else {
+			} else { // either the wantType is "Have" or it is "Block" but we can't send the block in this message
+				// in both cases just say that we have it
 				resp.BlockPresences = append(resp.BlockPresences, bitswap_message_pb.Message_BlockPresence{
-					Cid:  e.Block,
+					Cid:  e.Block, // this just returns the CID from the request, not to be confused with the block fetched above
 					Type: bitswap_message_pb.Message_Have,
 				})
 			}
+		} else { // we don't have the block
+			resp.BlockPresences = append(resp.BlockPresences, bitswap_message_pb.Message_BlockPresence{
+				Cid:  e.Block,
+				Type: bitswap_message_pb.Message_DontHave,
+			})
 		}
 	}
 
