@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"os"
 	"sync"
 	"time"
@@ -182,7 +183,7 @@ func (s *Session) writeLoop(ctx context.Context) {
 		case <-s.ready:
 			ready = true
 			if len(cids) > 0 {
-				s.send(cids)
+				s.send(cids, bitswap_message_pb.Message_Wantlist_Have)
 				cids = make([]cid.Cid, 0)
 			}
 		case <-timeout.C:
@@ -190,7 +191,7 @@ func (s *Session) writeLoop(ctx context.Context) {
 				continue
 			}
 			if len(cids) > 0 {
-				s.send(cids)
+				s.send(cids, bitswap_message_pb.Message_Wantlist_Have)
 				cids = make([]cid.Cid, 0)
 			}
 		case <-ctx.Done():
@@ -199,14 +200,17 @@ func (s *Session) writeLoop(ctx context.Context) {
 	}
 }
 
-func (s *Session) send(cids []cid.Cid) error {
+func (s *Session) send(cids []cid.Cid, wantType bitswap_message_pb.Message_Wantlist_WantType) error {
 	m := bitswap_message_pb.Message{}
 	m.Wantlist = bitswap_message_pb.Message_Wantlist{}
 	// TODO: Generate a list of encrypted CIDs
 	//  using s.generatePIRRequestToGetIndexFromCID(c)
 	for _, c := range cids {
 		bc := bitswap_message_pb.Cid{Cid: c}
-		m.Wantlist.Entries = append(m.Wantlist.Entries, bitswap_message_pb.Message_Wantlist_Entry{Block: bc, SendDontHave: true})
+		m.Wantlist.Entries = append(m.Wantlist.Entries, bitswap_message_pb.Message_Wantlist_Entry{Block: bc,
+			SendDontHave: true,
+			WantType:     wantType,
+		})
 	}
 
 	bytes, err := m.Marshal()
@@ -231,40 +235,66 @@ func (s *Session) handle(buf []byte) error {
 		logger.Warnw("failed to parse message as bitswap", "err", err)
 		return err
 	}
+
+	cidsIHave := make([]cid.Cid, 0)
+	for _, blockPresences := range m.BlockPresences {
+		givenCid, err := cid.Cast(blockPresences.Cid.Cid.Bytes())
+		if err != nil {
+			logger.Warnw("error casting CID from BlockPresences", err)
+			return err
+		}
+		haveBlockOrNot := blockPresences.Type.String()
+		if haveBlockOrNot == "Have" {
+			cidsIHave = append(cidsIHave, givenCid)
+		}
+	}
+
 	foundBlocks := 0
 	// bitswap 1.1
-	for _, bp := range m.Payload {
-		prefix, err := cid.PrefixFromBytes(bp.Prefix)
-		if err != nil {
-			logger.Warnw("failed to parse payload cid", "err", err)
-			continue
+	for _, e := range m.Wantlist.Entries {
+		if e.WantType.String() == "Block" {
+			for _, bp := range m.Payload {
+				prefix, err := cid.PrefixFromBytes(bp.Prefix)
+				if err != nil {
+					logger.Warnw("failed to parse payload cid", "err", err)
+					continue
+				}
+				c, err := prefix.Sum(bp.GetData())
+				if err != nil {
+					logger.Warnw("failed to hash payload", "err", err)
+					continue
+				}
+				if err := s.resolve(c, bp.GetData(), nil); err != nil {
+					continue
+				}
+				foundBlocks++
+			}
+			// bitswap 1.0
+			for _, b := range m.Blocks {
+				// CIDv0, sha256, protobuf only
+				mh, err := multihash.Sum(b, multihash.SHA2_256, -1)
+				if err != nil {
+					logger.Warnw("failed to hash block", "err", err)
+					continue
+				}
+				c := cid.NewCidV0(mh)
+				if err := s.resolve(c, b, nil); err != nil {
+					continue
+				}
+				foundBlocks++
+			}
+			if foundBlocks == 0 {
+				return errors.New("no requested block read")
+			}
+		} else {
+			c := e.Block.Cid
+			if slices.Contains(cidsIHave, c) {
+				err := s.send(cidsIHave, bitswap_message_pb.Message_Wantlist_Block)
+				if err != nil {
+					return err
+				}
+			}
 		}
-		c, err := prefix.Sum(bp.GetData())
-		if err != nil {
-			logger.Warnw("failed to hash payload", "err", err)
-			continue
-		}
-		if err := s.resolve(c, bp.GetData(), nil); err != nil {
-			continue
-		}
-		foundBlocks++
-	}
-	// bitswap 1.0
-	for _, b := range m.Blocks {
-		// CIDv0, sha256, protobuf only
-		mh, err := multihash.Sum(b, multihash.SHA2_256, -1)
-		if err != nil {
-			logger.Warnw("failed to hash block", "err", err)
-			continue
-		}
-		c := cid.NewCidV0(mh)
-		if err := s.resolve(c, b, nil); err != nil {
-			continue
-		}
-		foundBlocks++
-	}
-	if foundBlocks == 0 {
-		return errors.New("no requested block read")
 	}
 	return nil
 }
